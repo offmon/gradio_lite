@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Wheel Bundler</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://files.pythonhosted.org" crossorigin>
+<link rel="preconnect" href="https://pypi.org" crossorigin>
+<style>
+  :root {
+    --bg: #0e1014;
+    --panel: #161a22;
+    --panel-2: #1c212c;
+    --line: #262d3b;
+    --ink: #e7ecf3;
+    --ink-dim: #9aa3b2;
+    --accent: #7cf0c6;
+    --accent-dim: #2c6a55;
+    --warn: #f6c177;
+    --err: #ff6b6b;
+    --ok: #7cf0c6;
+    --pending: #6b7280;
+    --running: #6cb6ff;
+    --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    --display: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: 13px; line-height: 1.5; }
+  body {
+    background:
+      radial-gradient(900px 500px at 88% -10%, rgba(124,240,198,0.07), transparent 60%),
+      radial-gradient(700px 420px at -10% 110%, rgba(108,182,255,0.05), transparent 60%),
+      var(--bg);
+    min-height: 100vh;
+    padding: 28px 22px 80px;
+  }
+  .container { max-width: 1080px; margin: 0 auto; }
+
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 4px; }
+  h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 22px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .tag {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(124,240,198,0.08);
+    border: 1px solid var(--accent-dim);
+    padding: 3px 8px;
+    border-radius: 3px;
+  }
+  .lede { color: var(--ink-dim); margin: 0 0 22px; max-width: 720px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-family: var(--display);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    margin: 0 0 10px;
+    color: var(--ink-dim);
+    font-weight: 500;
+  }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  label.field { display: flex; align-items: center; gap: 8px; color: var(--ink-dim); }
+  label.field input {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    width: 110px;
+  }
+  label.field input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+  button {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--accent);
+    color: #0b1814;
+    border: 0;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: filter 0.15s ease;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  button:disabled { background: #2a3340; color: var(--ink-dim); cursor: not-allowed; }
+  button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  button.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+  .summary { display: flex; gap: 22px; flex-wrap: wrap; color: var(--ink-dim); font-size: 12px; margin-top: 10px; }
+  .summary b { color: var(--ink); font-weight: 600; }
+  .bar {
+    height: 6px;
+    background: var(--panel-2);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 12px;
+    border: 1px solid var(--line);
+  }
+  .bar > div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #6cb6ff);
+    width: 0%;
+    transition: width 0.2s ease;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 10px;
+    color: var(--ink-dim);
+    font-weight: 500;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-2);
+    position: sticky; top: 0;
+  }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid rgba(38,45,59,0.5); vertical-align: top; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  td.name { font-weight: 600; color: var(--ink); }
+  td.ver { color: var(--ink-dim); }
+  td.src { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  td.status { font-size: 11px; }
+  td.detail { color: var(--ink-dim); font-size: 11px; word-break: break-all; }
+  .pill {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .pill.pending { background: rgba(107,114,128,0.15); color: var(--pending); }
+  .pill.running { background: rgba(108,182,255,0.15); color: var(--running); }
+  .pill.ok { background: rgba(124,240,198,0.12); color: var(--ok); }
+  .pill.err { background: rgba(255,107,107,0.12); color: var(--err); }
+  .pill.warn { background: rgba(246,193,119,0.12); color: var(--warn); }
+
+  .table-wrap { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+
+  #log {
+    margin-top: 0;
+    background: #0a0c10;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    height: 160px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #log .l-info { color: var(--ink-dim); }
+  #log .l-ok { color: var(--ok); }
+  #log .l-err { color: var(--err); }
+  #log .l-warn { color: var(--warn); }
+
+  footer { color: var(--ink-dim); font-size: 11px; margin-top: 8px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .download-area { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .download-area .size { color: var(--ink-dim); font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Wheel Bundler</h1>
+    <span class="tag">Pyodide × PyPI</span>
+  </header>
+  <p class="lede">指定された 45 パッケージの wheel を Pyodide CDN と PyPI から取得し、ZIP にまとめてダウンロードします。すべての処理はブラウザ内で完結します。</p>
+
+  <div class="panel">
+    <h2>Configuration</h2>
+    <div class="controls">
+      <label class="field">Pyodide ver
+        <input id="pyodideVer" type="text" value="0.27.7" />
+      </label>
+      <button id="startBtn">Start</button>
+      <button id="downloadBtn" class="secondary" disabled>Download ZIP</button>
+      <span id="dlSize" class="size"></span>
+    </div>
+    <div class="summary" id="summary">
+      <span><b id="cTotal">45</b> total</span>
+      <span><b id="cDone">0</b> done</span>
+      <span><b id="cFail">0</b> failed</span>
+      <span><b id="cBytes">0</b> bytes</span>
+    </div>
+    <div class="bar"><div id="prog"></div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Packages</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:24%">Package</th>
+            <th style="width:14%">Version</th>
+            <th style="width:9%">Source</th>
+            <th style="width:11%">Status</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Log</h2>
+    <div id="log"></div>
+  </div>
+
+  <footer>
+    Pyodide lock: <span id="lockSrc">—</span> ・ JSZip via cdnjs
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+"use strict";
+
+// =========================================================================
+// Package list (parsed from list.txt)
+// =========================================================================
+const PACKAGES = [
+  { name: "packaging",          version: "24.2",        source: "pyodide" },
+  { name: "micropip",           version: "0.8.0",       source: "pyodide" },
+  { name: "pyparsing",          version: "3.1.2",       source: "pyodide" },
+  { name: "setuptools",         version: "69.5.1",      source: "pyodide" },
+  { name: "ssl",                version: "1.0.0",       source: "pyodide" },
+  { name: "typing_extensions",  version: "4.14.1",      source: "pypi"    },
+  { name: "typing-inspection",  version: "0.4.0",       source: "pypi"    },
+  { name: "fastapi",            version: "0.115.4",     source: "pypi"    },
+  { name: "pydantic",           version: "2.10.6",      source: "pypi"    },
+  { name: "filelock",           version: "3.29.0",      source: "pypi"    },
+  { name: "huggingface-hub",    version: "0.34.4",      source: "pypi"    },
+  { name: "anyio",              version: "4.13.0",      source: "pypi"    },
+  { name: "starlette",          version: "0.41.3",      source: "pypi"    },
+  { name: "charset-normalizer", version: "3.3.2",       source: "pyodide" },
+  { name: "idna",               version: "3.7",         source: "pyodide" },
+  { name: "urllib3",            version: "2.2.3",       source: "pyodide" },
+  { name: "certifi",            version: "2024.12.14",  source: "pyodide" },
+  { name: "requests",           version: "2.31.0",      source: "pyodide" },
+  { name: "fsspec",             version: "2024.3.1",    source: "pyodide" },
+  { name: "PyYAML",             version: "6.0.2",       source: "pyodide" },
+  { name: "tqdm",               version: "4.66.2",      source: "pyodide" },
+  { name: "annotated-types",    version: "0.6.0",       source: "pyodide" },
+  { name: "pydantic_core",      version: "2.27.2",      source: "pyodide" },
+  { name: "websockets",         version: "15.0.1",      source: "pypi"    },
+  { name: "semantic-version",   version: "2.10.0",      source: "pypi"    },
+  { name: "pydub",              version: "0.25.1",      source: "pypi"    },
+  { name: "groovy",             version: "0.1.2",       source: "pypi"    },
+  { name: "aiofiles",           version: "24.1.0",      source: "pypi"    },
+  { name: "tomlkit",            version: "0.13.3",      source: "pypi"    },
+  { name: "python-multipart",   version: "0.0.27",      source: "pypi"    },
+  { name: "safehttpx",          version: "0.1.7",       source: "pypi"    },
+  { name: "httpx",              version: "0.28.1",      source: "pyodide" },
+  { name: "MarkupSafe",         version: "2.1.5",       source: "pyodide" },
+  { name: "six",                version: "1.16.0",      source: "pyodide" },
+  { name: "python-dateutil",    version: "2.9.0.post0", source: "pyodide" },
+  { name: "pytz",               version: "2024.1",      source: "pyodide" },
+  { name: "orjson",             version: "3.10.1",      source: "pyodide" },
+  { name: "Brotli",             version: "1.1.0",       source: "pyodide" },
+  { name: "Jinja2",             version: "3.1.3",       source: "pyodide" },
+  { name: "pillow",             version: "10.2.0",      source: "pyodide" },
+  { name: "numpy",              version: "2.0.2",       source: "pyodide" },
+  { name: "pandas",             version: "2.2.3",       source: "pyodide" },
+  { name: "parso",              version: "0.8.4",       source: "pyodide" },
+  { name: "jedi",               version: "0.19.1",      source: "pyodide" },
+  { name: "openssl",            version: "1.1.1w",      source: "pyodide" },
+];
+
+// =========================================================================
+// State / DOM
+// =========================================================================
+const els = {
+  rows:        document.getElementById("rows"),
+  log:         document.getElementById("log"),
+  startBtn:    document.getElementById("startBtn"),
+  dlBtn:       document.getElementById("downloadBtn"),
+  dlSize:      document.getElementById("dlSize"),
+  cTotal:      document.getElementById("cTotal"),
+  cDone:       document.getElementById("cDone"),
+  cFail:       document.getElementById("cFail"),
+  cBytes:      document.getElementById("cBytes"),
+  prog:        document.getElementById("prog"),
+  pyodideVer:  document.getElementById("pyodideVer"),
+  lockSrc:     document.getElementById("lockSrc"),
+};
+
+const state = {
+  rows: [],   // mirror of PACKAGES with extra fields (status, filename, bytes, detail, data)
+  zip: null,
+  zipBlob: null,
+  running: false,
+};
+
+function normalize(name) {
+  return name.toLowerCase().replace(/[-_.]+/g, "-");
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function log(msg, kind = "info") {
+  const ts = new Date().toTimeString().slice(0, 8);
+  const line = document.createElement("div");
+  line.className = `l-${kind}`;
+  line.textContent = `[${ts}] ${msg}`;
+  els.log.appendChild(line);
+  els.log.scrollTop = els.log.scrollHeight;
+}
+
+// Build initial table
+function buildRows() {
+  els.rows.innerHTML = "";
+  state.rows = PACKAGES.map((pkg, idx) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="name"></td>
+      <td class="ver"></td>
+      <td class="src"></td>
+      <td class="status"><span class="pill pending">pending</span></td>
+      <td class="detail">—</td>
+    `;
+    tr.children[0].textContent = pkg.name;
+    tr.children[1].textContent = pkg.version;
+    tr.children[2].textContent = pkg.source;
+    els.rows.appendChild(tr);
+    return { ...pkg, idx, tr, status: "pending", filename: null, bytes: 0, detail: "—", data: null };
+  });
+  updateSummary();
+}
+
+function setStatus(row, status, detail) {
+  row.status = status;
+  if (detail !== undefined) row.detail = detail;
+  const pill = row.tr.querySelector(".status .pill");
+  pill.className = `pill ${status}`;
+  pill.textContent = status;
+  row.tr.querySelector(".detail").textContent = row.detail;
+}
+
+function updateSummary() {
+  const done = state.rows.filter(r => r.status === "ok").length;
+  const fail = state.rows.filter(r => r.status === "err").length;
+  const bytes = state.rows.reduce((s, r) => s + r.bytes, 0);
+  els.cTotal.textContent = state.rows.length;
+  els.cDone.textContent = done;
+  els.cFail.textContent = fail;
+  els.cBytes.textContent = fmtBytes(bytes);
+  els.prog.style.width = `${((done + fail) / state.rows.length) * 100}%`;
+}
+
+// =========================================================================
+// Pyodide lock loader
+// =========================================================================
+async function loadPyodideLock(version) {
+  const url = `https://cdn.jsdelivr.net/pyodide/v${version}/full/pyodide-lock.json`;
+  els.lockSrc.textContent = url;
+  log(`Fetching pyodide-lock.json (v${version})…`);
+  const r = await fetch(url, { cache: "force-cache" });
+  if (!r.ok) throw new Error(`pyodide-lock.json HTTP ${r.status}`);
+  const data = await r.json();
+  log(`pyodide-lock loaded: ${Object.keys(data.packages || {}).length} packages`, "ok");
+  // Build a normalized lookup
+  const lookup = {};
+  for (const [k, v] of Object.entries(data.packages || {})) {
+    lookup[normalize(k)] = { ...v, _key: k };
+  }
+  return { data, lookup, base: `https://cdn.jsdelivr.net/pyodide/v${version}/full/` };
+}
+
+// =========================================================================
+// Fetchers
+// =========================================================================
+async function fetchPyodidePkg(row, lock) {
+  const key = normalize(row.name);
+  const entry = lock.lookup[key];
+  if (!entry) {
+    throw new Error(`not in lock (key=${key})`);
+  }
+  if (entry.version && entry.version !== row.version) {
+    log(`${row.name}: lock has ${entry.version}, expected ${row.version} — using lock version`, "warn");
+  }
+  const fname = entry.file_name;
+  if (!fname) throw new Error("no file_name in lock entry");
+  // file_name may be relative or absolute
+  const url = /^https?:/i.test(fname) ? fname : (lock.base + fname);
+  const resp = await fetch(url, { cache: "force-cache" });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} @ ${url}`);
+  const buf = await resp.arrayBuffer();
+  // Extract just the basename for the zip
+  const base = fname.split("/").pop();
+  return { filename: base, data: buf, sourceUrl: url, lockVersion: entry.version };
+}
+
+async function fetchPypiPkg(row) {
+  const url = `https://pypi.org/pypi/${encodeURIComponent(row.name)}/${encodeURIComponent(row.version)}/json`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`pypi json HTTP ${r.status}`);
+  const meta = await r.json();
+  const files = meta.urls || [];
+  const wheels = files.filter(f => f.packagetype === "bdist_wheel");
+  // Prefer pure-python (py3-none-any / py2.py3-none-any)
+  const pure = wheels.find(f =>
+    f.filename.includes("py3-none-any.whl") || f.filename.includes("py2.py3-none-any.whl")
+  );
+  let chosen = pure || wheels[0];
+  if (!chosen) {
+    const sdist = files.find(f => f.packagetype === "sdist");
+    if (!sdist) throw new Error("no wheel or sdist on PyPI");
+    chosen = sdist;
+  }
+  const resp = await fetch(chosen.url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} @ ${chosen.url}`);
+  const buf = await resp.arrayBuffer();
+  return { filename: chosen.filename, data: buf, sourceUrl: chosen.url };
+}
+
+// =========================================================================
+// Concurrency-limited runner
+// =========================================================================
+async function runWithLimit(items, limit, worker) {
+  let i = 0;
+  const inflight = new Set();
+  async function spawn() {
+    if (i >= items.length) return;
+    const idx = i++;
+    const p = worker(items[idx]).finally(() => inflight.delete(p));
+    inflight.add(p);
+    if (inflight.size < limit && i < items.length) await spawn();
+    await p;
+    if (i < items.length) await spawn();
+  }
+  // Kick off in parallel up to limit
+  const starters = [];
+  for (let k = 0; k < Math.min(limit, items.length); k++) starters.push(spawn());
+  await Promise.all(starters);
+}
+
+// =========================================================================
+// Main
+// =========================================================================
+async function start() {
+  if (state.running) return;
+  state.running = true;
+  els.startBtn.disabled = true;
+  els.dlBtn.disabled = true;
+  els.dlSize.textContent = "";
+  state.zipBlob = null;
+
+  // Reset
+  for (const row of state.rows) {
+    row.status = "pending";
+    row.detail = "—";
+    row.bytes = 0;
+    row.data = null;
+    row.filename = null;
+    setStatus(row, "pending", "—");
+  }
+  updateSummary();
+
+  const pyVer = (els.pyodideVer.value || "0.27.7").trim();
+
+  let lock;
+  try {
+    lock = await loadPyodideLock(pyVer);
+  } catch (e) {
+    log(`Failed to load pyodide lock: ${e.message}`, "err");
+    state.running = false;
+    els.startBtn.disabled = false;
+    return;
+  }
+
+  // Process all rows with limited concurrency
+  await runWithLimit(state.rows, 6, async (row) => {
+    setStatus(row, "running", "fetching…");
+    try {
+      const result = row.source === "pyodide"
+        ? await fetchPyodidePkg(row, lock)
+        : await fetchPypiPkg(row);
+      row.filename = result.filename;
+      row.data = result.data;
+      row.bytes = result.data.byteLength;
+      const detail = `${result.filename} · ${fmtBytes(row.bytes)}`;
+      setStatus(row, "ok", detail);
+      log(`✓ ${row.name} ${row.version} → ${result.filename} (${fmtBytes(row.bytes)})`, "ok");
+    } catch (e) {
+      setStatus(row, "err", e.message);
+      log(`✗ ${row.name} ${row.version}: ${e.message}`, "err");
+    }
+    updateSummary();
+  });
+
+  // Build ZIP
+  const okRows = state.rows.filter(r => r.status === "ok");
+  if (okRows.length === 0) {
+    log("No files fetched successfully — nothing to zip.", "err");
+    state.running = false;
+    els.startBtn.disabled = false;
+    return;
+  }
+
+  log(`Building ZIP with ${okRows.length} files…`);
+  const zip = new JSZip();
+  const folder = zip.folder("wheels");
+  for (const r of okRows) folder.file(r.filename, r.data);
+  // Manifest
+  const manifest = [
+    "# Wheel bundle manifest",
+    `# generated: ${new Date().toISOString()}`,
+    `# pyodide_version: ${pyVer}`,
+    "",
+    "name\tversion\tsource\tfilename\tbytes",
+    ...state.rows.map(r =>
+      `${r.name}\t${r.version}\t${r.source}\t${r.filename || "-"}\t${r.bytes || 0}\t${r.status}` +
+      (r.status === "err" ? `\t${r.detail}` : "")
+    ),
+  ].join("\n");
+  zip.file("manifest.tsv", manifest);
+
+  const blob = await zip.generateAsync(
+    { type: "blob", compression: "STORE" },  // wheels are already zips, no recompression
+    (meta) => {
+      els.prog.style.width = `${meta.percent.toFixed(1)}%`;
+    }
+  );
+  state.zipBlob = blob;
+  els.dlSize.textContent = `wheels.zip · ${fmtBytes(blob.size)}`;
+  els.dlBtn.disabled = false;
+  log(`ZIP ready: ${fmtBytes(blob.size)}`, "ok");
+
+  const failed = state.rows.filter(r => r.status === "err");
+  if (failed.length) {
+    log(`${failed.length} package(s) failed: ${failed.map(r => r.name).join(", ")}`, "warn");
+  }
+
+  state.running = false;
+  els.startBtn.disabled = false;
+}
+
+function downloadZip() {
+  if (!state.zipBlob) return;
+  const url = URL.createObjectURL(state.zipBlob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "wheels.zip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+els.startBtn.addEventListener("click", start);
+els.dlBtn.addEventListener("click", downloadZip);
+
+buildRows();
+log("Ready. Click Start to fetch wheels.");
+</script>
+</body>
+</html>
