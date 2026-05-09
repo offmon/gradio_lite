@@ -328,7 +328,7 @@ def unload_local_modules(target_dir_path: str = "."):
     for module_name in loaded_modules.values():
         if module_name is not None and module_name in sys.modules:
             del sys.modules[module_name]
-`;importScripts("https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js");let M,x,F,S;async function E(e,t,o,a=3){const s=V(e,o);for(let i=0;i<a;i++){const r=i===a-1;try{return t.install.callKwargs(s,{keep_going:!0})}catch(n){if(r)throw n;console.error("Failed to install packages. Retrying...",n)}}}async function oe(e,t,o,a){console.debug("Loading Pyodide."),t("Loading Pyodide");const s=await loadPyodide({stdout:o,stderr:a});console.debug("Pyodide is loaded."),console.debug("Loading micropip"),t("Loading micropip"),await s.loadPackage("micropip");const i=s.pyimport("micropip");console.debug("micropip is loaded.");const r=[e.gradioWheelUrl,e.gradioClientWheelUrl];console.debug("Loading Gradio wheels.",r),t("Loading Gradio wheels"),await s.loadPackage(["ssl","setuptools"]),await i.add_mock_package("ffmpy","0.3.0"),await E(s,i,r),console.debug("Gradio wheels are loaded."),console.debug("Mocking os module methods."),t("Mock os module methods"),await s.runPythonAsync(`
+`;importScripts("https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js");let M,x,F,S;async function E(e,t,o,a=3){const s=V(e,o);for(let i=0;i<a;i++){const r=i===a-1;try{return t.install.callKwargs(s,{keep_going:!0})}catch(n){if(r)throw n;console.error("Failed to install packages. Retrying...",n)}}}async function oe(e,t,o,a){console.debug("Loading Pyodide."),t("Loading Pyodide");const s=await loadPyodide({stdout:o,stderr:a});console.debug("Pyodide is loaded."),console.debug("Loading micropip"),t("Loading micropip"),await s.loadPackage("micropip");const i=s.pyimport("micropip");console.debug("micropip is loaded.");const r=[e.gradioWheelUrl,e.gradioClientWheelUrl];console.debug("Loading Gradio wheels.",r),t("Loading Gradio wheels"),await s.loadPackage(["ssl","setuptools"]),await i.add_mock_package("ffmpy","0.3.0"),t("Pre-installing pinned dependencies"),await(async()=>{try{await i.uninstall(["typing_extensions","starlette","fastapi","huggingface_hub","typing_inspection"])}catch(p){console.warn("pre-uninstall warning:",p)}})(),await i.install.callKwargs(["typing_extensions==4.14.1","typing_inspection==0.4.0","huggingface_hub==0.34.4","starlette==0.41.3","fastapi==0.115.4"],{keep_going:!0}),await E(s,i,r),console.debug("Gradio wheels are loaded."),console.debug("Mocking os module methods."),t("Mock os module methods"),await s.runPythonAsync(`
 import os
 
 os.link = lambda src, dst: None
@@ -370,11 +370,19 @@ async def _call_asgi_app_from_js(app_id, scope, receive, send):
 
 	await app(scope, rcv, snd)
 `),M=s.globals.get("_call_asgi_app_from_js"),console.debug("The ASGI wrapper function is defined."),console.debug("Mocking async libraries."),t("Mocking async libraries"),await s.runPythonAsync(`
-async def mocked_anyio_to_thread_run_sync(func, *args, cancellable=False, limiter=None):
+async def mocked_anyio_to_thread_run_sync(func, *args, abandon_on_cancel=False, cancellable=False, limiter=None):
 	return func(*args)
 
 import anyio.to_thread
 anyio.to_thread.run_sync = mocked_anyio_to_thread_run_sync
+
+# Gradio 5.45.0+ では一部モジュールが \`from anyio.to_thread import run_sync\` でローカル名に
+# バインドしているため、モジュール属性も上書きしてthreading不要にする。
+import sys
+for _modname in ("gradio.queueing","gradio.mcp"):
+	_mod = sys.modules.get(_modname)
+	if _mod is not None and hasattr(_mod, "run_sync"):
+		_mod.run_sync = mocked_anyio_to_thread_run_sync
 	`),console.debug("Async libraries are mocked."),console.debug("Setting up Python utility functions."),t("Setting up Python utility functions"),await s.runPythonAsync(ee),x=s.globals.get("_run_code"),F=s.globals.get("_run_script"),await s.runPythonAsync(te),S=s.globals.get("unload_local_modules"),console.debug("Python utility functions are set up."),t("Initialization completed");const n=new Z(s);return{pyodide:s,micropip:i,codeCompleter:n}}async function ie(e,t,o,a,s,i){const r=v(o);console.debug("Creating a home directory for the app.",{appId:o,appHomeDir:r}),e.FS.mkdir(r),console.debug("Mounting files.",a.files),s("Mounting files");const n=[];await Promise.all(Object.keys(a.files).map(async m=>{const f=a.files[m];let p;"url"in f?(console.debug(`Fetch a file from ${f.url}`),p=await fetch(f.url).then(y=>y.arrayBuffer()).then(y=>new Uint8Array(y))):p=f.data;const{opts:u}=a.files[m],g=w(o,m);console.debug(`Write a file "${g}"`),P(e,g,p,u),typeof p=="string"&&m.endsWith(".py")&&n.push(p)})),console.debug("Files are mounted."),console.debug("Installing packages.",a.requirements),s("Installing packages"),await E(e,t,a.requirements),console.debug("Packages are installed."),console.debug("Auto-loading modules.");const d=await Promise.all(n.map(m=>e.loadPackagesFromImports(m))),c=new Set(d.flat()),l=Array.from(c);l.length>0&&i(l);const h=l.map(m=>m.name);console.debug("Modules are auto-loaded.",l),(a.requirements.includes("matplotlib")||h.includes("matplotlib"))&&(console.debug("Setting matplotlib backend."),s("Setting matplotlib backend"),await e.runPythonAsync(`
 try:
 	import matplotlib
